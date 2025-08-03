@@ -91,6 +91,11 @@ export function CostEstimate({ reviewCount, promptLength }: CostEstimateProps) {
           <TrendingUp className="w-3 h-3" />
           Actual cost depends on review length and response size
         </p>
+        {reviewCount > 6000 && (
+          <p className="text-orange-600 font-medium">
+            ⚠️ Processing time: ~{Math.ceil(batches * 10 / 60)} minutes (may exceed 5-minute limit)
+          </p>
+        )}
       </div>
     </div>
   );

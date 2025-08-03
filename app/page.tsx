@@ -80,6 +80,20 @@ export default function Home() {
       return;
     }
 
+    // Check for hard limit to prevent timeouts
+    if (reviewPreview && reviewPreview.totalReviews > 6000) {
+      const proceed = confirm(
+        `Warning: You're attempting to process ${reviewPreview.totalReviews} reviews, which exceeds the recommended limit of 6,000 reviews for Vercel's 5-minute timeout.\n\n` +
+        `This will likely result in a timeout error.\n\n` +
+        `We strongly recommend splitting your data into multiple files with no more than 6,000 reviews each.\n\n` +
+        `Do you still want to proceed?`
+      );
+      
+      if (!proceed) {
+        return;
+      }
+    }
+
     setIsProcessing(true);
     setProcessingUpdate(null);
     setResults(null);
@@ -234,11 +248,11 @@ export default function Home() {
             </div>
             
             {/* Timeout warning for large datasets */}
-            {reviewPreview.totalReviews > 12000 && (
+            {reviewPreview.totalReviews > 6000 && (
               <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                 <p className="text-sm text-yellow-800">
                   <strong>⚠️ Large Dataset Warning:</strong> Processing {reviewPreview.totalReviews} reviews may take up to {Math.ceil(reviewPreview.totalReviews / 200 * 10 / 60)} minutes. 
-                  For datasets over 12,000 reviews, consider splitting into smaller files to avoid timeouts.
+                  For datasets over 6,000 reviews, consider splitting into smaller files to avoid Vercel's 5-minute timeout limit.
                 </p>
               </div>
             )}

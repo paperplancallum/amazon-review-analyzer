@@ -47,6 +47,10 @@ export function FileUpload({ onFilesSelected, files, onRemoveFile }: FileUploadP
           <li>• <strong>Rating</strong> (or Score) - Optional</li>
           <li>• <strong>Title</strong> (or Subject) - Optional</li>
         </ul>
+        <div className="mt-3 p-2 bg-blue-50 rounded text-xs text-blue-700">
+          <strong>💡 Tip:</strong> For best performance, keep each file under 6,000 reviews. 
+          Large datasets can be split into multiple files and processed separately.
+        </div>
       </div>
       
       <div
