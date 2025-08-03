@@ -1,4 +1,4 @@
-import { ReviewProcessorStream } from '@/lib/reviewProcessorStream';
+import { ReviewProcessorStreamV2 } from '@/lib/reviewProcessorStreamV2';
 
 // Use Edge Runtime for unlimited streaming
 export const runtime = 'edge';
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
           estimatedBatches: Math.ceil(reviews.length / 100)
         }) + '\n'));
         
-        const processor = new ReviewProcessorStream(apiKey);
+        const processor = new ReviewProcessorStreamV2(apiKey);
         
         // Process reviews with streaming updates using generator
         for await (const update of processor.processReviewsStream(reviews, promptTemplate)) {
