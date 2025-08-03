@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     const mergedInsights: CategoryInsights = {};
     
     for (const batchResult of batchResults) {
-      for (const [category, data] of Object.entries(batchResult)) {
+      for (const [category, data] of Object.entries(batchResult as CategoryInsights)) {
         if (!mergedInsights[category]) {
           mergedInsights[category] = { insights: [] };
         }
