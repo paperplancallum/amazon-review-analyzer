@@ -252,7 +252,7 @@ export default function Home() {
               <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                 <p className="text-sm text-yellow-800">
                   <strong>⚠️ Large Dataset Warning:</strong> Processing {reviewPreview.totalReviews} reviews may take up to {Math.ceil(reviewPreview.totalReviews / 200 * 10 / 60)} minutes. 
-                  For datasets over 6,000 reviews, consider splitting into smaller files to avoid Vercel's 5-minute timeout limit.
+                  For datasets over 6,000 reviews, consider splitting into smaller files to avoid Vercel&apos;s 5-minute timeout limit.
                 </p>
               </div>
             )}
