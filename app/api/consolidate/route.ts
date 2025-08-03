@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { CategoryInsights } from '@/lib/promptManager';
 
-export const maxDuration = 60; // 1 minute should be enough for consolidation
+export const maxDuration = 120; // 2 minutes for larger consolidations
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,7 +27,12 @@ export async function POST(request: NextRequest) {
         if (!mergedInsights[category]) {
           mergedInsights[category] = { insights: [] };
         }
-        mergedInsights[category].insights.push(...data.insights);
+        // Limit quotes to prevent payload from being too large
+        const limitedInsights = data.insights.map(insight => ({
+          ...insight,
+          quotes: insight.quotes.slice(0, 10) // Max 10 quotes per insight
+        }));
+        mergedInsights[category].insights.push(...limitedInsights);
       }
     }
     

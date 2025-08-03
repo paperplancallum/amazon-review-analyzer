@@ -129,6 +129,9 @@ export default function Home() {
       let totalCost = 0;
       
       // Process in chunks of 5 batches at a time
+      const consolidationThreshold = 10; // Consolidate every 10 batch results
+      let needsIntermediateConsolidation = false;
+      
       while (currentBatch < totalBatches) {
         if (abortControllerRef.current?.signal.aborted) {
           throw new Error('Processing aborted');
@@ -191,6 +194,39 @@ export default function Home() {
           reviewsProcessed: Math.min(currentBatch * batchSize, uploadData.allReviews.length),
           totalReviews: uploadData.allReviews.length,
         });
+        
+        // Intermediate consolidation to prevent timeout
+        if (allBatchResults.length >= consolidationThreshold && currentBatch < totalBatches) {
+          setProcessingUpdate({
+            currentBatch: Math.min(currentBatch, totalBatches),
+            totalBatches,
+            status: 'Performing intermediate consolidation...',
+            tokensUsed: totalTokensUsed,
+            estimatedCost: totalCost,
+            reviewsProcessed: Math.min(currentBatch * batchSize, uploadData.allReviews.length),
+            totalReviews: uploadData.allReviews.length,
+          });
+          
+          const intermediateResponse = await fetch('/api/consolidate', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              batchResults: allBatchResults,
+              userApiKey: userApiKey,
+            }),
+            signal: abortControllerRef.current.signal,
+          });
+          
+          if (intermediateResponse.ok) {
+            const intermediateResult = await intermediateResponse.json();
+            allBatchResults.length = 0; // Clear array
+            allBatchResults.push(intermediateResult.results);
+            totalTokensUsed += intermediateResult.tokensUsed || 0;
+            totalCost += intermediateResult.cost || 0;
+          }
+        }
       }
       
       // Step 3: Consolidate all results
@@ -217,7 +253,33 @@ export default function Home() {
       });
       
       if (!consolidationResponse.ok) {
-        throw new Error('Failed to consolidate results');
+        const errorText = await consolidationResponse.text();
+        console.error('Consolidation failed:', consolidationResponse.status, errorText);
+        
+        // If consolidation fails, still show results without consolidation
+        const unconsolidatedResults: CategoryInsights = {};
+        for (const batchResult of allBatchResults) {
+          for (const [category, data] of Object.entries(batchResult as CategoryInsights)) {
+            if (!unconsolidatedResults[category]) {
+              unconsolidatedResults[category] = { insights: [] };
+            }
+            unconsolidatedResults[category].insights.push(...data.insights);
+          }
+        }
+        
+        setResults(unconsolidatedResults);
+        setProcessingUpdate({
+          currentBatch: totalBatches,
+          totalBatches,
+          status: 'Analysis complete (without AI consolidation due to timeout)',
+          tokensUsed: totalTokensUsed,
+          estimatedCost: totalCost,
+          reviewsProcessed: uploadData.allReviews.length,
+          totalReviews: uploadData.allReviews.length,
+        });
+        
+        alert('Consolidation timed out. Showing all insights without AI deduplication. You may see some duplicate insights.');
+        return;
       }
       
       const consolidationResult = await consolidationResponse.json();
