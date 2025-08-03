@@ -1,103 +1,287 @@
-import Image from "next/image";
+'use client';
+
+import React, { useState, useRef } from 'react';
+import { FileUpload } from '@/components/FileUpload';
+import { PromptEditor } from '@/components/PromptEditor';
+import { ProcessingDashboard } from '@/components/ProcessingDashboard';
+import { ReportViewer } from '@/components/ReportViewerNew';
+import { CostEstimate } from '@/components/CostEstimate';
+import { Button } from '@/components/ui/button';
+import { Play, Loader2, Square } from 'lucide-react';
+import { DEFAULT_PROMPT_TEMPLATE } from '@/lib/promptManager';
+import { CategoryInsights } from '@/lib/promptManager';
+
+interface ProcessingUpdate {
+  currentBatch: number;
+  totalBatches: number;
+  status: string;
+  tokensUsed?: number;
+  estimatedCost?: number;
+}
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [files, setFiles] = useState<File[]>([]);
+  const [prompt, setPrompt] = useState(DEFAULT_PROMPT_TEMPLATE);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processingUpdate, setProcessingUpdate] = useState<ProcessingUpdate | null>(null);
+  const [results, setResults] = useState<CategoryInsights | null>(null);
+  const [reviewPreview, setReviewPreview] = useState<{ totalReviews: number; reviews: any[] } | null>(null);
+  const [userApiKey, setUserApiKey] = useState<string>('');
+  const [processedReviews, setProcessedReviews] = useState<any[]>([]);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  const handleFilesSelected = async (newFiles: File[]) => {
+    setFiles(newFiles);
+    setReviewPreview(null);
+    
+    if (newFiles.length > 0) {
+      // Upload files to get preview
+      const formData = new FormData();
+      newFiles.forEach(file => formData.append('files', file));
+
+      try {
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setReviewPreview({
+            totalReviews: data.totalReviews,
+            reviews: data.reviews
+          });
+        }
+      } catch (error) {
+        console.error('Failed to get preview:', error);
+      }
+    }
+  };
+
+  const handleRemoveFile = (index: number) => {
+    const newFiles = files.filter((_, i) => i !== index);
+    setFiles(newFiles);
+    if (newFiles.length === 0) {
+      setReviewPreview(null);
+    }
+  };
+
+  const handlePromptChange = (newPrompt: string) => {
+    setPrompt(newPrompt);
+  };
+
+  const handleApiKeyChange = (apiKey: string) => {
+    setUserApiKey(apiKey);
+  };
+
+  const startProcessing = async () => {
+    if (files.length === 0) {
+      alert('Please upload at least one file');
+      return;
+    }
+
+    setIsProcessing(true);
+    setProcessingUpdate(null);
+    setResults(null);
+    
+    // Create new abort controller for this processing session
+    abortControllerRef.current = new AbortController();
+
+    try {
+      // Step 1: Upload files and extract reviews
+      const formData = new FormData();
+      files.forEach(file => formData.append('files', file));
+
+      const uploadResponse = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to upload files');
+      }
+
+      const uploadData = await uploadResponse.json();
+      setProcessedReviews(uploadData.allReviews);
+
+      // Step 2: Process reviews with the prompt
+      const response = await fetch('/api/process', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          reviews: uploadData.allReviews,
+          promptTemplate: prompt,
+          userApiKey: userApiKey,
+        }),
+        signal: abortControllerRef.current.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to process reviews');
+      }
+
+      // Read the stream
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('No response body');
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.trim()) {
+            try {
+              const data = JSON.parse(line);
+              
+              if (data.type === 'progress') {
+                setProcessingUpdate({
+                  currentBatch: data.currentBatch,
+                  totalBatches: data.totalBatches,
+                  status: data.status,
+                  tokensUsed: data.tokensUsed,
+                  estimatedCost: data.estimatedCost,
+                });
+              } else if (data.type === 'complete') {
+                setResults(data.results);
+              } else if (data.type === 'error') {
+                throw new Error(data.error);
+              }
+            } catch (e) {
+              console.error('Failed to parse line:', line, e);
+            }
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error('Processing error:', error);
+      if (error.name === 'AbortError') {
+        setProcessingUpdate({
+          currentBatch: processingUpdate?.currentBatch || 0,
+          totalBatches: processingUpdate?.totalBatches || 0,
+          status: 'Analysis stopped by user',
+        });
+      } else {
+        alert(error instanceof Error ? error.message : 'An error occurred during processing');
+      }
+    } finally {
+      setIsProcessing(false);
+      abortControllerRef.current = null;
+    }
+  };
+
+  const stopProcessing = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <header className="bg-white shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <h1 className="text-2xl font-bold text-gray-900">Amazon Review Analyzer</h1>
+          <p className="text-sm text-gray-600 mt-1">Upload reviews and extract actionable insights using AI</p>
         </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-4 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[600px]">
+          {/* Left: File Upload */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <FileUpload 
+              onFilesSelected={handleFilesSelected}
+              files={files}
+              onRemoveFile={handleRemoveFile}
+            />
+          </div>
+
+          {/* Right: Prompt Editor */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <PromptEditor 
+              onPromptChange={handlePromptChange}
+              onApiKeyChange={handleApiKeyChange}
+              initialPrompt={prompt}
+            />
+          </div>
+        </div>
+
+        {/* Review Preview */}
+        {reviewPreview && !isProcessing && !results && (
+          <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+            <div className="text-center">
+              <p className="text-lg font-semibold text-blue-900">
+                Ready to analyze {reviewPreview.totalReviews} reviews
+              </p>
+              <p className="text-sm text-blue-700 mt-1">
+                {files.length} file{files.length > 1 ? 's' : ''} uploaded
+              </p>
+            </div>
+            
+            <div className="mt-4 pt-4 border-t border-blue-200">
+              <CostEstimate 
+                reviewCount={reviewPreview.totalReviews} 
+                promptLength={prompt.length}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Process Button */}
+        <div className="mt-6 flex justify-center gap-4">
+          <Button
+            onClick={startProcessing}
+            disabled={isProcessing || files.length === 0}
+            size="lg"
+            className="min-w-[200px]"
+          >
+            {isProcessing ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              <>
+                <Play className="w-4 h-4 mr-2" />
+                Start Analysis
+              </>
+            )}
+          </Button>
+          
+          {isProcessing && (
+            <Button
+              onClick={stopProcessing}
+              variant="destructive"
+              size="lg"
+              className="min-w-[150px]"
+            >
+              <Square className="w-4 h-4 mr-2" />
+              Stop Analysis
+            </Button>
+          )}
+        </div>
+
+        {/* Processing Dashboard */}
+        <ProcessingDashboard 
+          update={processingUpdate}
+          isProcessing={isProcessing}
+        />
+
+        {/* Results */}
+        {results && (
+          <div className="mt-8 bg-white rounded-lg shadow p-6">
+            <ReportViewer results={results} originalReviews={processedReviews} />
+          </div>
+        )}
       </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
     </div>
   );
 }
