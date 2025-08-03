@@ -79,7 +79,7 @@ export class ReviewProcessor {
       estimatedCost: totalCost,
     });
     
-    const finalConsolidation = await this.aiConsolidation(basicConsolidated, onUpdate);
+    const finalConsolidation = await this.aiConsolidation(basicConsolidated);
     totalTokensUsed += finalConsolidation.tokensUsed;
     totalCost += finalConsolidation.cost;
     
@@ -211,8 +211,7 @@ export class ReviewProcessor {
   }
 
   private async aiConsolidation(
-    consolidatedInsights: CategoryInsights,
-    onUpdate?: (update: ProcessingUpdate) => void
+    consolidatedInsights: CategoryInsights
   ): Promise<{ insights: CategoryInsights; tokensUsed: number; cost: number }> {
     const consolidationPrompt = `You are an expert at analyzing and consolidating customer review insights. 
 I have collected insights from analyzing ${Object.values(consolidatedInsights).reduce((acc, cat) => acc + cat.insights.length, 0)} different insights across multiple batches of reviews.

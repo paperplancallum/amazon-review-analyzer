@@ -25,9 +25,9 @@ export default function Home() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingUpdate, setProcessingUpdate] = useState<ProcessingUpdate | null>(null);
   const [results, setResults] = useState<CategoryInsights | null>(null);
-  const [reviewPreview, setReviewPreview] = useState<{ totalReviews: number; reviews: any[] } | null>(null);
+  const [reviewPreview, setReviewPreview] = useState<{ totalReviews: number; reviews: Array<{ content: string; rating?: number; title?: string; asin?: string }> } | null>(null);
   const [userApiKey, setUserApiKey] = useState<string>('');
-  const [processedReviews, setProcessedReviews] = useState<any[]>([]);
+  const [processedReviews, setProcessedReviews] = useState<Array<{ content: string; rating?: number; title?: string; asin?: string }>>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const handleFilesSelected = async (newFiles: File[]) => {
@@ -161,9 +161,9 @@ export default function Home() {
           }
         }
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Processing error:', error);
-      if (error.name === 'AbortError') {
+      if ((error as Error).name === 'AbortError') {
         setProcessingUpdate({
           currentBatch: processingUpdate?.currentBatch || 0,
           totalBatches: processingUpdate?.totalBatches || 0,
