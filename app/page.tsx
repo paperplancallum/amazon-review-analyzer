@@ -120,8 +120,8 @@ export default function Home() {
       const uploadData = await uploadResponse.json();
       setProcessedReviews(uploadData.allReviews);
 
-      // Step 2: Process reviews with the prompt using Edge Runtime
-      const response = await fetch('/api/process-edge', {
+      // Step 2: Process reviews with the prompt using streaming Edge Runtime
+      const response = await fetch('/api/process-stream', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -215,9 +215,9 @@ export default function Home() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[600px]">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left: File Upload */}
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="bg-white rounded-lg shadow p-6 h-fit">
             <FileUpload 
               onFilesSelected={handleFilesSelected}
               files={files}
@@ -226,7 +226,7 @@ export default function Home() {
           </div>
 
           {/* Right: Prompt Editor */}
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="bg-white rounded-lg shadow p-6 h-fit">
             <PromptEditor 
               onPromptChange={handlePromptChange}
               onApiKeyChange={handleApiKeyChange}

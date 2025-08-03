@@ -118,11 +118,11 @@ export function PromptEditor({ onPromptChange, onApiKeyChange, initialPrompt = D
         </div>
       )}
 
-      <div className="h-[300px] overflow-hidden">
+      <div className="min-h-[300px]">
         <textarea
           value={prompt}
           onChange={(e) => handlePromptChange(e.target.value)}
-          className="w-full h-full overflow-y-auto p-4 font-mono text-sm border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full h-[300px] overflow-y-auto p-4 font-mono text-sm border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
           placeholder="Enter your prompt template here..."
         />
       </div>

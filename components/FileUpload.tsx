@@ -36,7 +36,7 @@ export function FileUpload({ onFilesSelected, files, onRemoveFile }: FileUploadP
   });
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="flex flex-col">
       <div className="mb-4">
         <h2 className="text-lg font-semibold">Upload Reviews</h2>
         <p className="text-sm text-gray-600 mt-1">
@@ -55,7 +55,7 @@ export function FileUpload({ onFilesSelected, files, onRemoveFile }: FileUploadP
       
       <div
         {...getRootProps()}
-        className={`flex-1 border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+        className={`min-h-[200px] border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
           isDragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'
         }`}
       >
