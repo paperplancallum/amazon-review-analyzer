@@ -17,6 +17,8 @@ interface ProcessingUpdate {
   status: string;
   tokensUsed?: number;
   estimatedCost?: number;
+  reviewsProcessed?: number;
+  totalReviews?: number;
 }
 
 export default function Home() {
@@ -166,6 +168,8 @@ export default function Home() {
                   status: data.status,
                   tokensUsed: data.tokensUsed,
                   estimatedCost: data.estimatedCost,
+                  reviewsProcessed: data.reviewsProcessed,
+                  totalReviews: data.totalReviews,
                 });
               } else if (data.type === 'complete') {
                 setResults(data.results);

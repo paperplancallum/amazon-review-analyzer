@@ -13,6 +13,8 @@ export interface ProcessingUpdate {
   status: string;
   tokensUsed?: number;
   estimatedCost?: number;
+  reviewsProcessed?: number;
+  totalReviews?: number;
 }
 
 export class ReviewProcessorEdge {
@@ -35,6 +37,10 @@ export class ReviewProcessorEdge {
     const allResults: CategoryInsights[] = [];
     let totalTokensUsed = 0;
     let totalCost = 0;
+    let reviewsProcessedCount = 0;
+    
+    // Log initial review count
+    console.log(`Starting to process ${reviews.length} total reviews in ${batches.length} batches`);
 
     // Process in chunks to avoid memory issues and allow for streaming
     for (let chunkStart = 0; chunkStart < batches.length; chunkStart += this.chunkSize) {
@@ -49,9 +55,11 @@ export class ReviewProcessorEdge {
         onUpdate?.({
           currentBatch: batchIndex + 1,
           totalBatches: batches.length,
-          status: `Processing batch ${batchIndex + 1} of ${batches.length}...`,
+          status: `Processing batch ${batchIndex + 1} of ${batches.length} (${reviewsProcessedCount + 1}-${Math.min(reviewsProcessedCount + batch.length, reviews.length)} of ${reviews.length} reviews)...`,
           tokensUsed: totalTokensUsed,
           estimatedCost: totalCost,
+          reviewsProcessed: reviewsProcessedCount,
+          totalReviews: reviews.length,
         });
 
         try {
@@ -59,13 +67,16 @@ export class ReviewProcessorEdge {
           allResults.push(result.insights);
           totalTokensUsed += result.tokensUsed;
           totalCost += result.cost;
+          reviewsProcessedCount += batch.length;
 
           onUpdate?.({
             currentBatch: batchIndex + 1,
             totalBatches: batches.length,
-            status: `Completed batch ${batchIndex + 1} of ${batches.length}`,
+            status: `Completed batch ${batchIndex + 1} of ${batches.length} (${reviewsProcessedCount}/${reviews.length} reviews)`,
             tokensUsed: totalTokensUsed,
             estimatedCost: totalCost,
+            reviewsProcessed: reviewsProcessedCount,
+            totalReviews: reviews.length,
           });
         } catch (error) {
           console.error(`Error processing batch ${batchIndex + 1}:`, error);
@@ -125,12 +136,17 @@ export class ReviewProcessorEdge {
     totalTokensUsed += finalConsolidation.tokensUsed;
     totalCost += finalConsolidation.cost;
     
+    // Log final count
+    console.log(`Processed ${reviewsProcessedCount} reviews out of ${reviews.length} total`);
+    
     onUpdate?.({
       currentBatch: batches.length,
       totalBatches: batches.length,
-      status: 'Analysis complete!',
+      status: `Analysis complete! Processed all ${reviewsProcessedCount} reviews.`,
       tokensUsed: totalTokensUsed,
       estimatedCost: totalCost,
+      reviewsProcessed: reviewsProcessedCount,
+      totalReviews: reviews.length,
     });
 
     return finalConsolidation.insights;
@@ -148,6 +164,8 @@ export class ReviewProcessorEdge {
     batch: Review[],
     promptTemplate: string
   ): Promise<{ insights: CategoryInsights; tokensUsed: number; cost: number }> {
+    console.log(`Processing batch with ${batch.length} reviews`);
+    
     const reviewsText = batch
       .map((review, index) => {
         let text = `Review ${index + 1}: ${review.content}`;
@@ -255,8 +273,15 @@ export class ReviewProcessorEdge {
   private async aiConsolidation(
     consolidatedInsights: CategoryInsights
   ): Promise<{ insights: CategoryInsights; tokensUsed: number; cost: number }> {
+    const totalInsights = Object.values(consolidatedInsights).reduce((acc, cat) => acc + cat.insights.length, 0);
+    const totalQuotes = Object.values(consolidatedInsights).reduce((acc, cat) => 
+      acc + cat.insights.reduce((sum, insight) => sum + insight.quotes.length, 0), 0
+    );
+    
+    console.log(`Consolidating ${totalInsights} insights with ${totalQuotes} total quotes`);
+    
     const consolidationPrompt = `You are an expert at analyzing and consolidating customer review insights. 
-I have collected insights from analyzing ${Object.values(consolidatedInsights).reduce((acc, cat) => acc + cat.insights.length, 0)} different insights across multiple batches of reviews.
+I have collected insights from analyzing ${totalInsights} different insights across multiple batches of reviews.
 
 Your task is to intelligently consolidate these insights by:
 1. ELIMINATE DUPLICATE INSIGHTS - If multiple insights say essentially the same thing, merge them into ONE
