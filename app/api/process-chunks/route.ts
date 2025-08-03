@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
       console.log(`Processing batch ${i + 1} with ${batch.length} reviews`);
       
       const reviewsText = batch
-        .map((review: any, index: number) => {
+        .map((review: { content: string; rating?: number; title?: string }, index: number) => {
           let text = `Review ${index + 1}: ${review.content}`;
           if (review.rating) text += ` (Rating: ${review.rating}/5)`;
           if (review.title) text += ` [Title: ${review.title}]`;

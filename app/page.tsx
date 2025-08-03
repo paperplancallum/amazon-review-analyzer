@@ -121,7 +121,7 @@ export default function Home() {
       setProcessedReviews(uploadData.allReviews);
 
       // Step 2: Process reviews in chunks to avoid timeout
-      const allBatchResults: any[] = [];
+      const allBatchResults: CategoryInsights[] = [];
       let currentBatch = 0;
       const batchSize = 100;
       const totalBatches = Math.ceil(uploadData.allReviews.length / batchSize);
