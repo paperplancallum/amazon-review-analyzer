@@ -80,13 +80,13 @@ export default function Home() {
       return;
     }
 
-    // Check for hard limit to prevent timeouts
-    if (reviewPreview && reviewPreview.totalReviews > 6000) {
+    // Updated warning for Edge Runtime - much higher limits
+    if (reviewPreview && reviewPreview.totalReviews > 20000) {
       const proceed = confirm(
-        `Warning: You're attempting to process ${reviewPreview.totalReviews} reviews, which exceeds the recommended limit of 6,000 reviews for Vercel's 5-minute timeout.\n\n` +
-        `This will likely result in a timeout error.\n\n` +
-        `We strongly recommend splitting your data into multiple files with no more than 6,000 reviews each.\n\n` +
-        `Do you still want to proceed?`
+        `Notice: You're processing ${reviewPreview.totalReviews} reviews.\n\n` +
+        `With Edge Runtime streaming, we can handle larger datasets, but processing over 20,000 reviews may take a very long time.\n\n` +
+        `For optimal performance, consider splitting into files of 10,000 reviews or less.\n\n` +
+        `Do you want to proceed?`
       );
       
       if (!proceed) {
@@ -118,8 +118,8 @@ export default function Home() {
       const uploadData = await uploadResponse.json();
       setProcessedReviews(uploadData.allReviews);
 
-      // Step 2: Process reviews with the prompt
-      const response = await fetch('/api/process', {
+      // Step 2: Process reviews with the prompt using Edge Runtime
+      const response = await fetch('/api/process-edge', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -156,7 +156,10 @@ export default function Home() {
             try {
               const data = JSON.parse(line);
               
-              if (data.type === 'progress') {
+              if (data.type === 'init') {
+                // Initial connection established - Edge Runtime is ready
+                console.log('Edge Runtime connection established', data);
+              } else if (data.type === 'progress') {
                 setProcessingUpdate({
                   currentBatch: data.currentBatch,
                   totalBatches: data.totalBatches,
@@ -247,12 +250,12 @@ export default function Home() {
               />
             </div>
             
-            {/* Timeout warning for large datasets */}
-            {reviewPreview.totalReviews > 6000 && (
-              <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <p className="text-sm text-yellow-800">
-                  <strong>⚠️ Large Dataset Warning:</strong> Processing {reviewPreview.totalReviews} reviews may take up to {Math.ceil(reviewPreview.totalReviews / 200 * 10 / 60)} minutes. 
-                  For datasets over 6,000 reviews, consider splitting into smaller files to avoid Vercel&apos;s 5-minute timeout limit.
+            {/* Updated warning for Edge Runtime */}
+            {reviewPreview.totalReviews > 10000 && (
+              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  <strong>ℹ️ Processing Time:</strong> Analyzing {reviewPreview.totalReviews} reviews will take approximately {Math.ceil(reviewPreview.totalReviews / 200 * 10 / 60)} minutes. 
+                  Edge Runtime allows extended processing times through streaming. The analysis will continue running even for large datasets.
                 </p>
               </div>
             )}

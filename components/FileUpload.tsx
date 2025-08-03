@@ -48,8 +48,8 @@ export function FileUpload({ onFilesSelected, files, onRemoveFile }: FileUploadP
           <li>• <strong>Title</strong> (or Subject) - Optional</li>
         </ul>
         <div className="mt-3 p-2 bg-blue-50 rounded text-xs text-blue-700">
-          <strong>💡 Tip:</strong> For best performance, keep each file under 6,000 reviews. 
-          Large datasets can be split into multiple files and processed separately.
+          <strong>💡 Tip:</strong> Edge Runtime can handle large datasets through streaming. 
+          For optimal performance, files with 10,000+ reviews may take longer to process.
         </div>
       </div>
       
