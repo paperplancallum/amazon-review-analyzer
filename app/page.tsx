@@ -209,7 +209,15 @@ export default function Home() {
           // Merge current batch results
           const tempMerged: CategoryInsights = {};
           for (const batchResult of allBatchResults) {
+            if (!batchResult || typeof batchResult !== 'object') {
+              console.error('Invalid batch result:', batchResult);
+              continue;
+            }
             for (const [category, data] of Object.entries(batchResult as CategoryInsights)) {
+              if (!data || !data.insights || !Array.isArray(data.insights)) {
+                console.error(`Invalid insights for category ${category}:`, data);
+                continue;
+              }
               if (!tempMerged[category]) {
                 tempMerged[category] = { insights: [] };
               }
@@ -258,7 +266,15 @@ export default function Home() {
       // First, merge all batch results
       const mergedInsights: CategoryInsights = {};
       for (const batchResult of allBatchResults) {
+        if (!batchResult || typeof batchResult !== 'object') {
+          console.error('Invalid batch result:', batchResult);
+          continue;
+        }
         for (const [category, data] of Object.entries(batchResult as CategoryInsights)) {
+          if (!data || !data.insights || !Array.isArray(data.insights)) {
+            console.error(`Invalid insights for category ${category}:`, data);
+            continue;
+          }
           if (!mergedInsights[category]) {
             mergedInsights[category] = { insights: [] };
           }
