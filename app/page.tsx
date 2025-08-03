@@ -8,8 +8,7 @@ import { ReportViewer } from '@/components/ReportViewerNew';
 import { CostEstimate } from '@/components/CostEstimate';
 import { Button } from '@/components/ui/button';
 import { Play, Loader2, Square } from 'lucide-react';
-import { DEFAULT_PROMPT_TEMPLATE } from '@/lib/promptManager';
-import { CategoryInsights } from '@/lib/promptManager';
+import { DEFAULT_PROMPT_TEMPLATE, CategoryInsights, ProcessedInsight } from '@/lib/promptManager';
 
 interface ProcessingUpdate {
   currentBatch: number;
@@ -214,14 +213,33 @@ export default function Home() {
               continue;
             }
             for (const [category, data] of Object.entries(batchResult as CategoryInsights)) {
-              if (!data || !data.insights || !Array.isArray(data.insights)) {
-                console.error(`Invalid insights for category ${category}:`, data);
+              // Handle empty categories or nested structures
+              if (!data) {
                 continue;
               }
+              
+              // Extract insights array, handling various formats
+              let insights: ProcessedInsight[] = [];
+              if (Array.isArray(data.insights)) {
+                insights = data.insights;
+              } else if (data.insights && typeof data.insights === 'object' && 'insights' in data.insights && Array.isArray((data.insights as { insights: ProcessedInsight[] }).insights)) {
+                // Handle nested {insights: {insights: [...]}} structure
+                insights = (data.insights as { insights: ProcessedInsight[] }).insights;
+                console.warn(`Found nested insights structure for ${category}, extracting inner array`);
+              } else if (!data.insights) {
+                // Empty category - this is valid
+                insights = [];
+              } else {
+                console.error(`Invalid insights format for category ${category}:`, data);
+                continue;
+              }
+              
               if (!tempMerged[category]) {
                 tempMerged[category] = { insights: [] };
               }
-              tempMerged[category].insights.push(...data.insights);
+              if (insights.length > 0) {
+                tempMerged[category].insights.push(...insights);
+              }
             }
           }
           
@@ -271,14 +289,33 @@ export default function Home() {
           continue;
         }
         for (const [category, data] of Object.entries(batchResult as CategoryInsights)) {
-          if (!data || !data.insights || !Array.isArray(data.insights)) {
-            console.error(`Invalid insights for category ${category}:`, data);
+          // Handle empty categories or nested structures
+          if (!data) {
             continue;
           }
+          
+          // Extract insights array, handling various formats
+          let insights: ProcessedInsight[] = [];
+          if (Array.isArray(data.insights)) {
+            insights = data.insights;
+          } else if (data.insights && typeof data.insights === 'object' && 'insights' in data.insights && Array.isArray((data.insights as { insights: ProcessedInsight[] }).insights)) {
+            // Handle nested {insights: {insights: [...]}} structure
+            insights = (data.insights as { insights: ProcessedInsight[] }).insights;
+            console.warn(`Found nested insights structure for ${category}, extracting inner array`);
+          } else if (!data.insights) {
+            // Empty category - this is valid
+            insights = [];
+          } else {
+            console.error(`Invalid insights format for category ${category}:`, data);
+            continue;
+          }
+          
           if (!mergedInsights[category]) {
             mergedInsights[category] = { insights: [] };
           }
-          mergedInsights[category].insights.push(...data.insights);
+          if (insights.length > 0) {
+            mergedInsights[category].insights.push(...insights);
+          }
         }
       }
       
@@ -303,6 +340,13 @@ export default function Home() {
           reviewsProcessed: uploadData.allReviews.length,
           totalReviews: uploadData.allReviews.length,
         });
+        
+        // Skip consolidation for categories with very few insights
+        if (mergedInsights[category].insights.length <= 3) {
+          console.log(`Skipping consolidation for ${category} (only ${mergedInsights[category].insights.length} insights)`);
+          consolidatedResults[category] = mergedInsights[category];
+          continue;
+        }
         
         try {
           const consolidationResponse = await fetch('/api/consolidate-category', {

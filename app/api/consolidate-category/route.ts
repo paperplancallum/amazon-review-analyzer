@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
+import { ProcessedInsight } from '@/lib/promptManager';
 
 export const maxDuration = 60; // 1 minute per category should be plenty
 
@@ -18,10 +19,16 @@ export async function POST(request: NextRequest) {
 
     const openai = new OpenAI({ apiKey });
     
-    const totalInsights = insights.length;
-    const totalQuotes = insights.reduce((sum, insight) => sum + insight.quotes.length, 0);
+    // Limit insights to prevent timeout
+    const MAX_INSIGHTS_PER_CONSOLIDATION = 50;
+    const insightsToProcess = insights.length > MAX_INSIGHTS_PER_CONSOLIDATION 
+      ? insights.slice(0, MAX_INSIGHTS_PER_CONSOLIDATION)
+      : insights;
     
-    console.log(`Consolidating ${totalInsights} insights with ${totalQuotes} quotes for category: ${category}`);
+    const totalInsights = insightsToProcess.length;
+    const totalQuotes = insightsToProcess.reduce((sum, insight) => sum + insight.quotes.length, 0);
+    
+    console.log(`Consolidating ${totalInsights} insights (out of ${insights.length} total) with ${totalQuotes} quotes for category: ${category}`);
     
     const consolidationPrompt = `You are an expert at analyzing and consolidating customer review insights. 
 I have collected ${totalInsights} insights for the "${category}" category from analyzing multiple batches of reviews.
@@ -40,7 +47,7 @@ ${getCategoryGuidelines(category)}
 
 Here are the insights to consolidate:
 
-${JSON.stringify(insights, null, 2)}
+${JSON.stringify(insightsToProcess, null, 2)}
 
 Please return a JSON array of consolidated insights that:
 - Preserve DISTINCT patterns within this category
@@ -66,7 +73,17 @@ Please return a JSON array of consolidated insights that:
     });
 
     const response = JSON.parse(completion.choices[0].message.content || '{}');
-    const consolidatedInsights = response.insights || response || [];
+    
+    // Handle both {insights: [...]} and [...] formats
+    let consolidatedInsights: ProcessedInsight[];
+    if (Array.isArray(response)) {
+      consolidatedInsights = response;
+    } else if (response.insights && Array.isArray(response.insights)) {
+      consolidatedInsights = response.insights;
+    } else {
+      console.error('Unexpected response format:', response);
+      consolidatedInsights = [];
+    }
 
     // Calculate tokens and cost for GPT-4o
     const promptTokens = completion.usage?.prompt_tokens || 0;
