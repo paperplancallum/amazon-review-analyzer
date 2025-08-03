@@ -161,13 +161,25 @@ export default function Home() {
 
         if (!response.ok) {
           const error = await response.json();
+          console.error('Chunk processing error:', error);
           throw new Error(error.error || 'Failed to process batch');
         }
 
         const chunkResult = await response.json();
+        console.log(`Chunk ${currentBatch}-${currentBatch + 5} completed:`, {
+          resultsCount: chunkResult.results?.length,
+          nextBatch: chunkResult.nextBatch,
+          isComplete: chunkResult.isComplete
+        });
+        
+        if (!chunkResult.results || !Array.isArray(chunkResult.results)) {
+          console.error('Invalid chunk result:', chunkResult);
+          throw new Error('Invalid response from chunk processing');
+        }
+        
         allBatchResults.push(...chunkResult.results);
-        totalTokensUsed += chunkResult.tokensUsed;
-        totalCost += chunkResult.cost;
+        totalTokensUsed += chunkResult.tokensUsed || 0;
+        totalCost += chunkResult.cost || 0;
         currentBatch = chunkResult.nextBatch || totalBatches;
         
         setProcessingUpdate({
@@ -229,7 +241,18 @@ export default function Home() {
           status: 'Analysis stopped by user',
         });
       } else {
-        alert(error instanceof Error ? error.message : 'An error occurred during processing');
+        console.error('Full processing error:', error);
+        const errorMessage = error instanceof Error ? error.message : 'An error occurred during processing';
+        setProcessingUpdate({
+          currentBatch: processingUpdate?.currentBatch || 0,
+          totalBatches: processingUpdate?.totalBatches || 0,
+          status: `Error: ${errorMessage}`,
+          tokensUsed: processingUpdate?.tokensUsed || 0,
+          estimatedCost: processingUpdate?.estimatedCost || 0,
+          reviewsProcessed: processingUpdate?.reviewsProcessed || 0,
+          totalReviews: processingUpdate?.totalReviews || 0,
+        });
+        alert(errorMessage);
       }
     } finally {
       setIsProcessing(false);
