@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ReviewProcessor } from '@/lib/reviewProcessor';
 
+// Increase Vercel function timeout to maximum (5 minutes for Pro/Enterprise, 10 seconds for Hobby)
+export const maxDuration = 300; // 5 minutes
+
 export async function POST(request: NextRequest) {
   try {
     const { reviews, promptTemplate, userApiKey } = await request.json();
@@ -20,6 +23,14 @@ export async function POST(request: NextRequest) {
         { error: 'OpenAI API key not configured. Please provide an API key.' },
         { status: 500 }
       );
+    }
+
+    // Add timeout warning for large datasets
+    const estimatedBatches = Math.ceil(reviews.length / 200);
+    const estimatedTimeSeconds = estimatedBatches * 10; // ~10 seconds per batch
+    
+    if (estimatedTimeSeconds > 240) { // Warning if over 4 minutes
+      console.warn(`Large dataset detected: ${reviews.length} reviews, ${estimatedBatches} batches. Estimated time: ${Math.round(estimatedTimeSeconds / 60)} minutes`);
     }
 
     // Create a readable stream for real-time updates

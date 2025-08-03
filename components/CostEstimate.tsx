@@ -11,7 +11,7 @@ interface CostEstimateProps {
 export function CostEstimate({ reviewCount, promptLength }: CostEstimateProps) {
   // Average review length (estimated)
   const avgReviewLength = 150; // characters
-  const batchSize = 50;
+  const batchSize = 200; // Updated to match ReviewProcessor
   const batches = Math.ceil(reviewCount / batchSize);
   
   // Estimate tokens

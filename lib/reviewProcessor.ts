@@ -17,7 +17,7 @@ export interface ProcessingUpdate {
 
 export class ReviewProcessor {
   private openai: OpenAI;
-  private batchSize: number = 50; // Optimized for ~5000 words per batch
+  private batchSize: number = 200; // Increased to reduce API calls and avoid timeouts
 
   constructor(apiKey: string) {
     this.openai = new OpenAI({
@@ -59,11 +59,30 @@ export class ReviewProcessor {
         });
       } catch (error) {
         console.error(`Error processing batch ${i + 1}:`, error);
+        
+        // Check if it's a timeout or rate limit error
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        const isTimeout = errorMessage.toLowerCase().includes('timeout') || 
+                         errorMessage.toLowerCase().includes('timed out');
+        const isRateLimit = errorMessage.toLowerCase().includes('rate limit') ||
+                           errorMessage.toLowerCase().includes('429');
+        
+        let status = `Error in batch ${i + 1}: ${errorMessage}`;
+        
+        if (isTimeout) {
+          status = `Timeout in batch ${i + 1}. Consider processing fewer reviews or upgrading your Vercel plan for longer timeouts.`;
+        } else if (isRateLimit) {
+          status = `Rate limit hit in batch ${i + 1}. Please wait a moment and try again with fewer reviews.`;
+        }
+        
         onUpdate?.({
           currentBatch: i + 1,
           totalBatches: batches.length,
-          status: `Error in batch ${i + 1}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          status,
         });
+        
+        // Re-throw to stop processing
+        throw error;
       }
     }
 

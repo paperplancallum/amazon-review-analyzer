@@ -232,6 +232,16 @@ export default function Home() {
                 promptLength={prompt.length}
               />
             </div>
+            
+            {/* Timeout warning for large datasets */}
+            {reviewPreview.totalReviews > 12000 && (
+              <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm text-yellow-800">
+                  <strong>⚠️ Large Dataset Warning:</strong> Processing {reviewPreview.totalReviews} reviews may take up to {Math.ceil(reviewPreview.totalReviews / 200 * 10 / 60)} minutes. 
+                  For datasets over 12,000 reviews, consider splitting into smaller files to avoid timeouts.
+                </p>
+              </div>
+            )}
           </div>
         )}
 
