@@ -130,7 +130,6 @@ export default function Home() {
       
       // Process in chunks of 5 batches at a time
       const consolidationThreshold = 10; // Consolidate every 10 batch results
-      let needsIntermediateConsolidation = false;
       
       while (currentBatch < totalBatches) {
         if (abortControllerRef.current?.signal.aborted) {
@@ -195,7 +194,7 @@ export default function Home() {
           totalReviews: uploadData.allReviews.length,
         });
         
-        // Intermediate consolidation to prevent timeout
+        // Intermediate consolidation by category to prevent timeout
         if (allBatchResults.length >= consolidationThreshold && currentBatch < totalBatches) {
           setProcessingUpdate({
             currentBatch: Math.min(currentBatch, totalBatches),
@@ -207,90 +206,127 @@ export default function Home() {
             totalReviews: uploadData.allReviews.length,
           });
           
-          const intermediateResponse = await fetch('/api/consolidate', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              batchResults: allBatchResults,
-              userApiKey: userApiKey,
-            }),
-            signal: abortControllerRef.current.signal,
-          });
-          
-          if (intermediateResponse.ok) {
-            const intermediateResult = await intermediateResponse.json();
-            allBatchResults.length = 0; // Clear array
-            allBatchResults.push(intermediateResult.results);
-            totalTokensUsed += intermediateResult.tokensUsed || 0;
-            totalCost += intermediateResult.cost || 0;
+          // Merge current batch results
+          const tempMerged: CategoryInsights = {};
+          for (const batchResult of allBatchResults) {
+            for (const [category, data] of Object.entries(batchResult as CategoryInsights)) {
+              if (!tempMerged[category]) {
+                tempMerged[category] = { insights: [] };
+              }
+              tempMerged[category].insights.push(...data.insights);
+            }
           }
+          
+          // Consolidate each category
+          const tempConsolidated: CategoryInsights = {};
+          for (const [category, data] of Object.entries(tempMerged)) {
+            try {
+              const consolidationResponse = await fetch('/api/consolidate-category', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  category,
+                  insights: data.insights,
+                  userApiKey: userApiKey,
+                }),
+                signal: abortControllerRef.current.signal,
+              });
+              
+              if (consolidationResponse.ok) {
+                const result = await consolidationResponse.json();
+                tempConsolidated[category] = { insights: result.insights };
+                totalTokensUsed += result.tokensUsed || 0;
+                totalCost += result.cost || 0;
+              } else {
+                tempConsolidated[category] = data;
+              }
+            } catch (error) {
+              console.error(`Intermediate consolidation error for ${category}:`, error);
+              tempConsolidated[category] = data;
+            }
+          }
+          
+          // Replace batch results with consolidated version
+          allBatchResults.length = 0;
+          allBatchResults.push(tempConsolidated);
         }
       }
       
-      // Step 3: Consolidate all results
-      setProcessingUpdate({
-        currentBatch: totalBatches,
-        totalBatches,
-        status: 'Consolidating insights with AI...',
-        tokensUsed: totalTokensUsed,
-        estimatedCost: totalCost,
-        reviewsProcessed: uploadData.allReviews.length,
-        totalReviews: uploadData.allReviews.length,
-      });
-      
-      const consolidationResponse = await fetch('/api/consolidate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          batchResults: allBatchResults,
-          userApiKey: userApiKey,
-        }),
-        signal: abortControllerRef.current.signal,
-      });
-      
-      if (!consolidationResponse.ok) {
-        const errorText = await consolidationResponse.text();
-        console.error('Consolidation failed:', consolidationResponse.status, errorText);
-        
-        // If consolidation fails, still show results without consolidation
-        const unconsolidatedResults: CategoryInsights = {};
-        for (const batchResult of allBatchResults) {
-          for (const [category, data] of Object.entries(batchResult as CategoryInsights)) {
-            if (!unconsolidatedResults[category]) {
-              unconsolidatedResults[category] = { insights: [] };
-            }
-            unconsolidatedResults[category].insights.push(...data.insights);
+      // Step 3: Consolidate all results by category
+      // First, merge all batch results
+      const mergedInsights: CategoryInsights = {};
+      for (const batchResult of allBatchResults) {
+        for (const [category, data] of Object.entries(batchResult as CategoryInsights)) {
+          if (!mergedInsights[category]) {
+            mergedInsights[category] = { insights: [] };
           }
+          mergedInsights[category].insights.push(...data.insights);
+        }
+      }
+      
+      // Get all categories that have insights
+      const categoriesWithInsights = Object.keys(mergedInsights);
+      const consolidatedResults: CategoryInsights = {};
+      let categoryIndex = 0;
+      
+      // Process each category separately
+      for (const category of categoriesWithInsights) {
+        if (abortControllerRef.current?.signal.aborted) {
+          throw new Error('Processing aborted');
         }
         
-        setResults(unconsolidatedResults);
+        categoryIndex++;
         setProcessingUpdate({
           currentBatch: totalBatches,
           totalBatches,
-          status: 'Analysis complete (without AI consolidation due to timeout)',
+          status: `Consolidating ${category} (${categoryIndex}/${categoriesWithInsights.length})...`,
           tokensUsed: totalTokensUsed,
           estimatedCost: totalCost,
           reviewsProcessed: uploadData.allReviews.length,
           totalReviews: uploadData.allReviews.length,
         });
         
-        alert('Consolidation timed out. Showing all insights without AI deduplication. You may see some duplicate insights.');
-        return;
+        try {
+          const consolidationResponse = await fetch('/api/consolidate-category', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              category,
+              insights: mergedInsights[category].insights,
+              userApiKey: userApiKey,
+            }),
+            signal: abortControllerRef.current.signal,
+          });
+          
+          if (consolidationResponse.ok) {
+            const consolidationResult = await consolidationResponse.json();
+            consolidatedResults[category] = { insights: consolidationResult.insights };
+            totalTokensUsed += consolidationResult.tokensUsed || 0;
+            totalCost += consolidationResult.cost || 0;
+          } else {
+            // If a category fails, use unconsolidated insights
+            console.error(`Failed to consolidate ${category}, using raw insights`);
+            consolidatedResults[category] = mergedInsights[category];
+          }
+        } catch (error) {
+          console.error(`Error consolidating ${category}:`, error);
+          // Use unconsolidated insights for this category
+          consolidatedResults[category] = mergedInsights[category];
+        }
       }
       
-      const consolidationResult = await consolidationResponse.json();
-      setResults(consolidationResult.results);
+      setResults(consolidatedResults);
       
       setProcessingUpdate({
         currentBatch: totalBatches,
         totalBatches,
         status: 'Analysis complete!',
-        tokensUsed: totalTokensUsed + consolidationResult.tokensUsed,
-        estimatedCost: totalCost + consolidationResult.cost,
+        tokensUsed: totalTokensUsed,
+        estimatedCost: totalCost,
         reviewsProcessed: uploadData.allReviews.length,
         totalReviews: uploadData.allReviews.length,
       });
