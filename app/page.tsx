@@ -120,68 +120,106 @@ export default function Home() {
       const uploadData = await uploadResponse.json();
       setProcessedReviews(uploadData.allReviews);
 
-      // Step 2: Process reviews with the prompt using streaming Edge Runtime
-      const response = await fetch('/api/process-stream', {
+      // Step 2: Process reviews in chunks to avoid timeout
+      const allBatchResults: any[] = [];
+      let currentBatch = 0;
+      const batchSize = 100;
+      const totalBatches = Math.ceil(uploadData.allReviews.length / batchSize);
+      let totalTokensUsed = 0;
+      let totalCost = 0;
+      
+      // Process in chunks of 5 batches at a time
+      while (currentBatch < totalBatches) {
+        if (abortControllerRef.current?.signal.aborted) {
+          throw new Error('Processing aborted');
+        }
+        
+        setProcessingUpdate({
+          currentBatch: currentBatch + 1,
+          totalBatches,
+          status: `Processing batches ${currentBatch + 1} to ${Math.min(currentBatch + 5, totalBatches)} of ${totalBatches}...`,
+          tokensUsed: totalTokensUsed,
+          estimatedCost: totalCost,
+          reviewsProcessed: currentBatch * batchSize,
+          totalReviews: uploadData.allReviews.length,
+        });
+        
+        const response = await fetch('/api/process-chunks', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            reviews: uploadData.allReviews,
+            promptTemplate: prompt,
+            userApiKey: userApiKey,
+            startBatch: currentBatch,
+            batchCount: 5 // Process 5 batches at a time
+          }),
+          signal: abortControllerRef.current.signal,
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to process batch');
+        }
+
+        const chunkResult = await response.json();
+        allBatchResults.push(...chunkResult.results);
+        totalTokensUsed += chunkResult.tokensUsed;
+        totalCost += chunkResult.cost;
+        currentBatch = chunkResult.nextBatch || totalBatches;
+        
+        setProcessingUpdate({
+          currentBatch: Math.min(currentBatch, totalBatches),
+          totalBatches,
+          status: `Completed ${Math.min(currentBatch, totalBatches)} of ${totalBatches} batches`,
+          tokensUsed: totalTokensUsed,
+          estimatedCost: totalCost,
+          reviewsProcessed: Math.min(currentBatch * batchSize, uploadData.allReviews.length),
+          totalReviews: uploadData.allReviews.length,
+        });
+      }
+      
+      // Step 3: Consolidate all results
+      setProcessingUpdate({
+        currentBatch: totalBatches,
+        totalBatches,
+        status: 'Consolidating insights with AI...',
+        tokensUsed: totalTokensUsed,
+        estimatedCost: totalCost,
+        reviewsProcessed: uploadData.allReviews.length,
+        totalReviews: uploadData.allReviews.length,
+      });
+      
+      const consolidationResponse = await fetch('/api/consolidate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          reviews: uploadData.allReviews,
-          promptTemplate: prompt,
+          batchResults: allBatchResults,
           userApiKey: userApiKey,
         }),
         signal: abortControllerRef.current.signal,
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to process reviews');
+      
+      if (!consolidationResponse.ok) {
+        throw new Error('Failed to consolidate results');
       }
-
-      // Read the stream
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error('No response body');
-
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.trim()) {
-            try {
-              const data = JSON.parse(line);
-              
-              if (data.type === 'init') {
-                // Initial connection established - Edge Runtime is ready
-                console.log('Edge Runtime connection established', data);
-              } else if (data.type === 'progress') {
-                setProcessingUpdate({
-                  currentBatch: data.currentBatch,
-                  totalBatches: data.totalBatches,
-                  status: data.status,
-                  tokensUsed: data.tokensUsed,
-                  estimatedCost: data.estimatedCost,
-                  reviewsProcessed: data.reviewsProcessed,
-                  totalReviews: data.totalReviews,
-                });
-              } else if (data.type === 'complete') {
-                setResults(data.results);
-              } else if (data.type === 'error') {
-                throw new Error(data.error);
-              }
-            } catch (e) {
-              console.error('Failed to parse line:', line, e);
-            }
-          }
-        }
-      }
+      
+      const consolidationResult = await consolidationResponse.json();
+      setResults(consolidationResult.results);
+      
+      setProcessingUpdate({
+        currentBatch: totalBatches,
+        totalBatches,
+        status: 'Analysis complete!',
+        tokensUsed: totalTokensUsed + consolidationResult.tokensUsed,
+        estimatedCost: totalCost + consolidationResult.cost,
+        reviewsProcessed: uploadData.allReviews.length,
+        totalReviews: uploadData.allReviews.length,
+      });
     } catch (error) {
       console.error('Processing error:', error);
       if ((error as Error).name === 'AbortError') {
