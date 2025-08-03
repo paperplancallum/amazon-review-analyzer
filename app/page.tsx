@@ -266,39 +266,41 @@ export default function Home() {
           </div>
         )}
 
-        {/* Process Button */}
-        <div className="mt-6 flex justify-center gap-4">
-          <Button
-            onClick={startProcessing}
-            disabled={isProcessing || files.length === 0}
-            size="lg"
-            className="min-w-[200px]"
-          >
-            {isProcessing ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Processing...
-              </>
-            ) : (
-              <>
-                <Play className="w-4 h-4 mr-2" />
-                Start Analysis
-              </>
-            )}
-          </Button>
-          
-          {isProcessing && (
+        {/* Process Button - Only show when files are uploaded and not showing results */}
+        {files.length > 0 && !results && (
+          <div className="mt-6 flex justify-center gap-4">
             <Button
-              onClick={stopProcessing}
-              variant="destructive"
+              onClick={startProcessing}
+              disabled={isProcessing || files.length === 0}
               size="lg"
-              className="min-w-[150px]"
+              className="min-w-[200px]"
             >
-              <Square className="w-4 h-4 mr-2" />
-              Stop Analysis
+              {isProcessing ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <Play className="w-4 h-4 mr-2" />
+                  Start Analysis
+                </>
+              )}
             </Button>
-          )}
-        </div>
+            
+            {isProcessing && (
+              <Button
+                onClick={stopProcessing}
+                variant="destructive"
+                size="lg"
+                className="min-w-[150px]"
+              >
+                <Square className="w-4 h-4 mr-2" />
+                Stop Analysis
+              </Button>
+            )}
+          </div>
+        )}
 
         {/* Processing Dashboard */}
         <ProcessingDashboard 
