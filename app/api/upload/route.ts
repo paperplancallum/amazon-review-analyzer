@@ -28,22 +28,24 @@ export async function POST(request: NextRequest) {
       const jsonData = XLSX.utils.sheet_to_json(worksheet, { raw: false });
       
       // Extract reviews from the data
-      const reviews = jsonData
-        .map((row: Record<string, unknown>) => {
+      const reviews = (jsonData as Record<string, unknown>[])
+        .map((row) => {
           // Try to find review content from various possible column names
           const content = row['Content'] || row['content'] || row['Review'] || row['review'] || 
                          row['Text'] || row['text'] || row['Comment'] || row['comment'] || '';
           
           // Try to find rating
-          const rating = parseFloat(row['Rating'] || row['rating'] || row['Score'] || row['score'] || '0');
+          const ratingValue = row['Rating'] || row['rating'] || row['Score'] || row['score'] || '0';
+          const rating = parseFloat(String(ratingValue));
           
           // Try to find title
-          const title = row['Title'] || row['title'] || row['Subject'] || row['subject'] || undefined;
+          const titleValue = row['Title'] || row['title'] || row['Subject'] || row['subject'];
+          const title = titleValue ? String(titleValue) : undefined;
           
           return {
-            content: content.toString().trim(),
+            content: String(content).trim(),
             rating: isNaN(rating) ? 0 : rating,
-            title: title ? title.toString().trim() : undefined
+            title: title?.trim()
           };
         })
         .filter(review => review.content.length > 0); // Filter out empty reviews
